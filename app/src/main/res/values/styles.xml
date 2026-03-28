@@ -1,0 +1,43 @@
+<resources>
+    <!-- 深色主题（默认） -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="android:textColorPrimary">#E0E0FF</item>
+        <item name="android:textColorSecondary">#8090AA</item>
+        <item name="android:editTextColor">#E0E0FF</item>
+        <item name="android:listDivider">@drawable/list_divider_dark</item>
+        <item name="actionBarStyle">@style/CustomActionBar</item>
+    </style>
+
+    <style name="CustomActionBar" parent="Widget.AppCompat.ActionBar">
+        <item name="background">@color/colorPrimary</item>
+        <item name="titleTextStyle">@style/ActionBarTitle</item>
+    </style>
+
+    <style name="ActionBarTitle" parent="TextAppearance.AppCompat.Widget.ActionBar.Title">
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:textSize">18sp</item>
+    </style>
+
+    <!-- 白色主题 -->
+    <style name="AppThemeWhite" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/colorPrimaryWhite</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDarkWhite</item>
+        <item name="colorAccent">@color/colorAccentWhite</item>
+        <item name="android:windowBackground">@color/bg_white</item>
+        <item name="android:textColorPrimary">@color/text_primary_white</item>
+        <item name="android:textColorSecondary">@color/text_secondary_white</item>
+        <item name="android:textColorHint">#AAAAAA</item>
+        <item name="android:editTextColor">@color/text_primary_white</item>
+        <item name="android:listDivider">@drawable/list_divider_light</item>
+        <item name="actionBarStyle">@style/CustomActionBarWhite</item>
+    </style>
+
+    <style name="CustomActionBarWhite" parent="Widget.AppCompat.ActionBar">
+        <item name="background">@color/colorPrimaryWhite</item>
+        <item name="titleTextStyle">@style/ActionBarTitle</item>
+    </style>
+</resources>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?android:attr/windowBackground"
+    android:padding="8dp">
+
+    <!-- 按钮 -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:weightSum="2"
+        android:layout_marginBottom="8dp">
+        <Button android:id="@+id/btn_clear_log"
+            android:layout_width="0dp" android:layout_height="36dp"
+            android:layout_weight="1" android:layout_marginEnd="4dp"
+            android:text="🗑 清空日志" android:textSize="12sp"
+            android:backgroundTint="#663322" android:textColor="#FFFFFF"/>
+        <Button android:id="@+id/btn_scroll_bottom"
+            android:layout_width="0dp" android:layout_height="36dp"
+            android:layout_weight="1" android:layout_marginStart="4dp"
+            android:text="⬇ 滚到底部" android:textSize="12sp"
+            android:backgroundTint="#334455" android:textColor="#FFFFFF"/>
+    </LinearLayout>
+
+    <!-- 日志列表 -->
+    <androidx.recyclerview.widget.RecyclerView android:id="@+id/rv_logs"
+        android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="?android:attr/windowBackground"
+        android:padding="4dp"/>
+
+</LinearLayout>

@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">CarConnect</string>
+    <string name="bluetooth_settings">蓝牙设置</string>
+    <string name="wifi_settings">Wi-Fi设置</string>
+    <string name="app_list">应用列表</string>
+    <string name="log">运行日志</string>
+    <string name="save">保存</string>
+    <string name="scan">扫描</string>
+    <string name="connect">连接</string>
+</resources>

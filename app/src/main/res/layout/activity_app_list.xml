@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?android:attr/windowBackground"
+    android:padding="12dp">
+
+    <!-- 搜索框 -->
+    <EditText android:id="@+id/et_search_app"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:hint="🔍 搜索应用名称或包名..."
+        android:inputType="text"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textColorHint="?android:attr/textColorHint"
+        android:background="?android:attr/editTextBackground"
+        android:paddingHorizontal="12dp" android:paddingVertical="10dp"
+        android:layout_marginBottom="8dp"/>
+
+    <!-- 数量 + 进度 -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+        <TextView android:id="@+id/tv_app_count"
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="加载中..."
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="12sp"/>
+        <ProgressBar android:id="@+id/progress_apps"
+            android:layout_width="24dp" android:layout_height="24dp"
+            android:visibility="gone"/>
+    </LinearLayout>
+
+    <!-- 应用列表 -->
+    <androidx.recyclerview.widget.RecyclerView android:id="@+id/rv_apps"
+        android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+</LinearLayout>

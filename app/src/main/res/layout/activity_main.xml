@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- 标题栏 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="16dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🚗 CarConnect"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:textColor="?android:attr/textColorPrimary" />
+
+            <!-- 主题切换按钮 -->
+            <Button
+                android:id="@+id/btn_toggle_theme"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:text="☀ 白色"
+                android:textSize="12sp"
+                android:paddingHorizontal="14dp"
+                android:backgroundTint="#334499"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+
+        <!-- 连接状态卡片 -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingBottom="8dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="连接状态"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/tv_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="初始化..."
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tv_bt_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🔵 蓝牙: 未连接"
+                    android:textSize="14sp"
+                    android:textColor="#FF6B6B"
+                    android:paddingBottom="6dp" />
+
+                <TextView
+                    android:id="@+id/tv_wifi_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="📶 Wi-Fi: 等待蓝牙连接..."
+                    android:textSize="14sp"
+                    android:textColor="#FF6B6B"
+                    android:paddingBottom="4dp" />
+
+                <TextView
+                    android:id="@+id/tv_wifi_info"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="12sp"
+                    android:paddingTop="2dp" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- 功能按钮卡片 -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="功能设置"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:paddingBottom="12dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:weightSum="2">
+
+                    <Button
+                        android:id="@+id/btn_bluetooth_settings"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:text="🔵 蓝牙设置"
+                        android:textSize="13sp"
+                        android:backgroundTint="@color/colorPrimary"
+                        android:textColor="#FFFFFF" />
+
+                    <Button
+                        android:id="@+id/btn_wifi_settings"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:text="📶 Wi-Fi设置"
+                        android:textSize="13sp"
+                        android:backgroundTint="@color/colorPrimary"
+                        android:textColor="#FFFFFF" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:weightSum="2"
+                    android:layout_marginTop="8dp">
+
+                    <Button
+                        android:id="@+id/btn_app_list"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:text="📱 绑定应用"
+                        android:textSize="13sp"
+                        android:backgroundTint="@color/colorPrimary"
+                        android:textColor="#FFFFFF" />
+
+                    <Button
+                        android:id="@+id/btn_log"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:text="📋 运行日志"
+                        android:textSize="13sp"
+                        android:backgroundTint="@color/colorPrimary"
+                        android:textColor="#FFFFFF" />
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- 服务控制卡片 -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="服务控制"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:paddingBottom="12dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:weightSum="3">
+
+                    <Button
+                        android:id="@+id/btn_start_service"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:text="▶ 启动"
+                        android:textSize="12sp"
+                        android:backgroundTint="#1A6340"
+                        android:textColor="#FFFFFF" />
+
+                    <Button
+                        android:id="@+id/btn_manual_scan"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:layout_marginHorizontal="4dp"
+                        android:text="🔍 扫描"
+                        android:textSize="12sp"
+                        android:backgroundTint="#334499"
+                        android:textColor="#FFFFFF" />
+
+                    <Button
+                        android:id="@+id/btn_stop_scan"
+                        android:layout_width="0dp"
+                        android:layout_height="44dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:text="■ 停止"
+                        android:textSize="12sp"
+                        android:backgroundTint="#802020"
+                        android:textColor="#FFFFFF" />
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- 说明 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="💡 开机自动启动 | 后台循环发现蓝牙+Wi-Fi | 支持亿联车机"
+            android:textSize="11sp"
+            android:gravity="center"
+            android:paddingTop="8dp" />
+
+    </LinearLayout>
+</ScrollView>
