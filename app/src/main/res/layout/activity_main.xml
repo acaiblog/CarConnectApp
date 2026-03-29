@@ -250,6 +250,138 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
+        <!-- 循环间隔 + 开机自启合并卡片 -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="设置"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:paddingBottom="10dp" />
+
+                <!-- 循环间隔行 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="循环间隔"
+                        android:textSize="13sp"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:layout_marginEnd="6dp" />
+
+                    <EditText
+                        android:id="@+id/et_scan_interval"
+                        android:layout_width="56dp"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:maxLength="3"
+                        android:textSize="14sp"
+                        android:textColor="?android:attr/textColorPrimary"
+                        android:gravity="center"
+                        android:hint="30" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="秒"
+                        android:textSize="12sp"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="6dp" />
+
+                    <Button
+                        android:id="@+id/btn_save_interval"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="保存"
+                        android:textSize="12sp"
+                        android:paddingHorizontal="12dp"
+                        android:backgroundTint="@color/colorPrimary"
+                        android:textColor="#FFFFFF" />
+
+                </LinearLayout>
+
+                <!-- 开机自启行 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="开机自启"
+                        android:textSize="13sp"
+                        android:textColor="?android:attr/textColorPrimary" />
+
+                    <android.widget.Switch
+                        android:id="@+id/sw_launch_on_boot"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+
+                </LinearLayout>
+
+                <!-- 提示行 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingTop="6dp">
+
+                    <TextView
+                        android:id="@+id/tv_interval_hint"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="当前: 30 秒  |  修改后重启服务生效"
+                        android:textSize="11sp"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                    <TextView
+                        android:id="@+id/tv_boot_hint"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="已开启"
+                        android:textSize="11sp"
+                        android:textColor="?android:attr/textColorSecondary" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- 热点客户端信息（热点模式时显示） -->
+        <TextView
+            android:id="@+id/tv_hotspot_clients"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="12sp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:visibility="gone"
+            android:paddingBottom="4dp" />
+
         <!-- 说明 -->
         <TextView
             android:layout_width="match_parent"

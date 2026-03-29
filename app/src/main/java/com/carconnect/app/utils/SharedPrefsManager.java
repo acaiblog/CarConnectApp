@@ -159,4 +159,27 @@ public class SharedPrefsManager {
     public static boolean isLaunchOnBoot() {
         return prefs.getBoolean(KEY_LAUNCH_ON_BOOT, true);
     }
+
+    // -------- Scan Interval --------
+    private static final String KEY_SCAN_INTERVAL_SEC = "scan_interval_sec";
+    /** 默认后台循环扫描间隔 30 秒，最小 10 秒，最大 300 秒 */
+    private static final int DEFAULT_SCAN_INTERVAL_SEC = 30;
+    private static final int MIN_SCAN_INTERVAL_SEC     = 10;
+    private static final int MAX_SCAN_INTERVAL_SEC     = 300;
+
+    public static void setScanIntervalSec(int seconds) {
+        int clamped = Math.max(MIN_SCAN_INTERVAL_SEC, Math.min(MAX_SCAN_INTERVAL_SEC, seconds));
+        prefs.edit().putInt(KEY_SCAN_INTERVAL_SEC, clamped).apply();
+    }
+
+    /** 返回后台扫描间隔（毫秒） */
+    public static long getScanIntervalMs() {
+        int sec = prefs.getInt(KEY_SCAN_INTERVAL_SEC, DEFAULT_SCAN_INTERVAL_SEC);
+        return sec * 1000L;
+    }
+
+    /** 返回后台扫描间隔（秒，用于 UI 显示） */
+    public static int getScanIntervalSec() {
+        return prefs.getInt(KEY_SCAN_INTERVAL_SEC, DEFAULT_SCAN_INTERVAL_SEC);
+    }
 }

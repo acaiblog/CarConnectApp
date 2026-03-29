@@ -19,6 +19,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 热点权限（需 adb 授予） -->
+    <uses-permission android:name="android.permission.TETHER_PRIVILEGED" />
 
     <!-- 系统权限 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -28,6 +30,12 @@
 
     <!-- 振动 -->
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- 存储权限（日志导出需要，Android 10以下） -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <!-- vivo 特殊后台权限 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />

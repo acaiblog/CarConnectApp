@@ -28,22 +28,23 @@ public class BootReceiver extends BroadcastReceiver {
             return;
         }
 
-        LogManager.i("BootReceiver", "收到开机广播，启动 CarConnect 服务");
+        LogManager.i("BootReceiver", "收到开机广播，启动 CarConnect");
 
-        // 1. 启动后台连接服务
-        Intent serviceIntent = new Intent(context, CarConnectService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent);
-        } else {
-            context.startService(serviceIntent);
-        }
-
-        // 2. 若开启了开机打开主界面，延迟 2 秒后启动（等系统桌面稳定）
-        if (SharedPrefsManager.isLaunchOnBoot()) {
-            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+        // 延迟 2 秒等桌面稳定后，先打开主界面，主界面内会自动启动后台服务
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (SharedPrefsManager.isLaunchOnBoot()) {
                 LogManager.i("BootReceiver", "开机自启：打开 CarConnect 主界面");
                 AppLaunchManager.launchMainActivity(context);
-            }, 2000);
-        }
+            } else {
+                // 未开启主界面自启，仅启动后台服务
+                LogManager.i("BootReceiver", "开机自启：仅启动后台服务");
+                Intent serviceIntent = new Intent(context, CarConnectService.class);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent);
+                } else {
+                    context.startService(serviceIntent);
+                }
+            }
+        }, 2000);
     }
 }

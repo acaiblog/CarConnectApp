@@ -46,20 +46,24 @@ public class AppLaunchManager {
     }
 
     /**
-     * 尝试启动绑定应用：需蓝牙 + Wi-Fi 同时已连接，且尚未启动过
+     * 尝试启动绑定应用：
+     * - 普通模式：需蓝牙 + Wi-Fi 同时已连接
+     * - 热点模式：仅需蓝牙已连接（Wi-Fi 侧视为已通过热点建立连接）
      */
     private static void tryLaunchBoundApp(Context context) {
-        if (!bluetoothConnected || !wifiConnected) return;
+        boolean hotspotMode = SharedPrefsManager.loadWifiConfig().isHotspotMode();
+        if (!bluetoothConnected) return;
+        if (!hotspotMode && !wifiConnected) return;
         if (appLaunched) return;
         if (!SharedPrefsManager.isAutoLaunchApp()) return;
         if (!SharedPrefsManager.hasBoundApp()) {
-            LogManager.i(TAG, "蓝牙+Wi-Fi 均已连接，但未绑定任何应用");
+            LogManager.i(TAG, "蓝牙+连接均已就绪，但未绑定任何应用");
             return;
         }
 
         String pkg = SharedPrefsManager.getBoundAppPackage();
         String name = SharedPrefsManager.getBoundAppName();
-        LogManager.i(TAG, "蓝牙+Wi-Fi 均已连接，启动绑定应用: " + name + " (" + pkg + ")");
+        LogManager.i(TAG, "连接完成，启动绑定应用: " + name + " (" + pkg + ")");
 
         try {
             PackageManager pm = context.getApplicationContext().getPackageManager();

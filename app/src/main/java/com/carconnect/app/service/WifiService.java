@@ -9,13 +9,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
-import android.net.NetworkInfo;
-import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
-import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Handler;
@@ -25,17 +19,13 @@ import android.os.Looper;
 import androidx.core.app.NotificationCompat;
 
 import com.carconnect.app.activity.MainActivity;
-import com.carconnect.app.model.WifiConfig;
 import com.carconnect.app.utils.AppLaunchManager;
 import com.carconnect.app.utils.LogManager;
 import com.carconnect.app.utils.SharedPrefsManager;
 
-import java.util.List;
-
 /**
- * Wi-Fi 自动连接服务
- * - 在蓝牙连接后自动连接车机热点
- * - 显示连接信息
+ * Wi-Fi 热点服务
+ * 功能：蓝牙连接后自动关闭 Wi-Fi，打开本机热点，让车机连接手机热点上网
  */
 public class WifiService extends Service {
 
@@ -43,60 +33,72 @@ public class WifiService extends Service {
     private static final String CHANNEL_ID = "wifi_channel";
     private static final int NOTIFICATION_ID = 1002;
 
-    public static final String ACTION_START_WIFI_CONNECT = "com.carconnect.app.START_WIFI";
-    public static final String ACTION_WIFI_CONNECTED = "com.carconnect.app.WIFI_CONNECTED";
-    public static final String ACTION_WIFI_DISCONNECTED = "com.carconnect.app.WIFI_DISCONNECTED";
-    public static final String ACTION_WIFI_CONNECTING = "com.carconnect.app.WIFI_CONNECTING";
-    public static final String ACTION_WIFI_FAILED = "com.carconnect.app.WIFI_FAILED";
-    public static final String ACTION_WIFI_INFO = "com.carconnect.app.WIFI_INFO";
-    public static final String EXTRA_SSID = "ssid";
-    public static final String EXTRA_IP = "ip";
-    public static final String EXTRA_SIGNAL = "signal";
-    public static final String EXTRA_MAC = "mac";
-    public static final String EXTRA_MESSAGE = "message";
+    public static final String ACTION_START_WIFI_CONNECT    = "com.carconnect.app.START_WIFI";
+    public static final String ACTION_WIFI_CONNECTED        = "com.carconnect.app.WIFI_CONNECTED";
+    public static final String ACTION_WIFI_DISCONNECTED     = "com.carconnect.app.WIFI_DISCONNECTED";
+    public static final String ACTION_WIFI_CONNECTING       = "com.carconnect.app.WIFI_CONNECTING";
+    public static final String ACTION_WIFI_FAILED           = "com.carconnect.app.WIFI_FAILED";
+    public static final String ACTION_WIFI_INFO             = "com.carconnect.app.WIFI_INFO";
+    public static final String ACTION_HOTSPOT_STARTED       = "com.carconnect.app.HOTSPOT_STARTED";
+    public static final String ACTION_HOTSPOT_STOPPED       = "com.carconnect.app.HOTSPOT_STOPPED";
+    public static final String ACTION_HOTSPOT_CLIENTS_UPDATED = "com.carconnect.app.HOTSPOT_CLIENTS";
+
+    public static final String EXTRA_SSID          = "ssid";
+    public static final String EXTRA_IP            = "ip";
+    public static final String EXTRA_SIGNAL        = "signal";
+    public static final String EXTRA_MAC           = "mac";
+    public static final String EXTRA_MESSAGE       = "message";
+    public static final String EXTRA_HOTSPOT_SSID  = "hotspot_ssid";
+    public static final String EXTRA_CLIENT_COUNT  = "client_count";
+    public static final String EXTRA_CLIENTS_INFO  = "clients_info";
 
     private WifiManager wifiManager;
-    private WifiConfig config;
     private Handler handler;
-    private int currentRetryCount = 0;
-    private boolean isConnecting = false;
-    private boolean isConnected = false;
 
-    // Wi-Fi 状态广播接收器
+    // 热点相关状态
+    private Object localOnlyHotspotReservation = null; // WifiManager.LocalOnlyHotspotReservation
+    private boolean isHotspotStarted  = false;
+    private boolean isHotspotStarting = false; // 防重复触发
+    private Runnable clientCheckRunnable = null;
+
+    /**
+     * 监听 Wi-Fi 状态 + 系统热点状态
+     * - WIFI_STATE_DISABLED：Wi-Fi 关闭后触发开热点
+     * - WIFI_AP_STATE_CHANGED：监听系统热点开关状态
+     */
     private final BroadcastReceiver wifiStateReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if (WifiManager.NETWORK_STATE_CHANGED_ACTION.equals(action)) {
-                NetworkInfo networkInfo = intent.getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO);
-                if (networkInfo != null) {
-                    if (networkInfo.isConnected()) {
-                        WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-                        String ssid = wifiInfo != null ? wifiInfo.getSSID().replace("\"", "") : "";
-                        if (isTargetWifi(ssid)) {
-                            onWifiConnected(wifiInfo);
-                        }
-                    } else if (networkInfo.getState() == NetworkInfo.State.DISCONNECTED) {
-                        if (isConnected) {
-                            isConnected = false;
-                            LogManager.w(TAG, "Wi-Fi 已断开");
-                            sendBroadcast(new Intent(ACTION_WIFI_DISCONNECTED));
-                            AppLaunchManager.onWifiDisconnected();
-                            // 重新尝试连接
-                            handler.postDelayed(() -> {
-                                currentRetryCount = 0;
-                                startWifiConnect();
-                            }, 5000);
-                        }
+            if (WifiManager.WIFI_STATE_CHANGED_ACTION.equals(action)) {
+                int state = intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_UNKNOWN);
+                LogManager.d(TAG, "Wi-Fi 状态变化: " + state);
+                if (state == WifiManager.WIFI_STATE_DISABLED) {
+                    if (isHotspotStarting && !isHotspotStarted) {
+                        LogManager.i(TAG, "Wi-Fi 已关闭，自动触发开热点");
+                        handler.postDelayed(() -> doStartHotspot(), 500);
                     }
                 }
-            } else if (WifiManager.SCAN_RESULTS_AVAILABLE_ACTION.equals(action)) {
-                handleScanResults();
-            } else if (WifiManager.WIFI_STATE_CHANGED_ACTION.equals(action)) {
-                int state = intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, WifiManager.WIFI_STATE_UNKNOWN);
-                if (state == WifiManager.WIFI_STATE_ENABLED) {
-                    LogManager.i(TAG, "Wi-Fi 已开启");
-                    startWifiConnect();
+            } else if ("android.net.wifi.WIFI_AP_STATE_CHANGED".equals(action)) {
+                // 13 = WIFI_AP_STATE_ENABLED, 11 = WIFI_AP_STATE_DISABLED
+                int apState = intent.getIntExtra("wifi_state", -1);
+                LogManager.d(TAG, "热点状态变化: apState=" + apState);
+                if (apState == 13 && !isHotspotStarted) {
+                    String ssid = getSystemHotspotSsid();
+                    LogManager.i(TAG, "系统热点已开启，SSID: " + ssid);
+                    isHotspotStarted  = true;
+                    isHotspotStarting = false;
+                    updateNotification("热点已开启: " + ssid);
+                    Intent bi = new Intent(ACTION_HOTSPOT_STARTED);
+                    bi.putExtra(EXTRA_HOTSPOT_SSID, ssid);
+                    sendBroadcast(bi);
+                    AppLaunchManager.onWifiConnected(WifiService.this);
+                    startClientCheckLoop();
+                } else if (apState == 11 && isHotspotStarted) {
+                    isHotspotStarted  = false;
+                    isHotspotStarting = false;
+                    LogManager.i(TAG, "系统热点已关闭");
+                    sendBroadcast(new Intent(ACTION_HOTSPOT_STOPPED));
                 }
             }
         }
@@ -107,298 +109,387 @@ public class WifiService extends Service {
         super.onCreate();
         handler = new Handler(Looper.getMainLooper());
         wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
-        config = SharedPrefsManager.loadWifiConfig();
-
         createNotificationChannel();
-        registerReceivers();
-        LogManager.i(TAG, "Wi-Fi 服务已创建");
+
+        IntentFilter filter = new IntentFilter(WifiManager.WIFI_STATE_CHANGED_ACTION);
+        filter.addAction("android.net.wifi.WIFI_AP_STATE_CHANGED");
+        registerReceiver(wifiStateReceiver, filter);
+        LogManager.i(TAG, "Wi-Fi 热点服务已创建");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        startForeground(NOTIFICATION_ID, buildNotification("Wi-Fi 服务运行中"));
-        config = SharedPrefsManager.loadWifiConfig();
-
-        if (intent != null && ACTION_START_WIFI_CONNECT.equals(intent.getAction())) {
-            LogManager.i(TAG, "收到蓝牙连接通知，开始 Wi-Fi 连接");
-            currentRetryCount = 0;
-            startWifiConnect();
-        } else if (config.isEnabled() && config.isAutoConnect()) {
-            startWifiConnect();
-        }
-
+        startForeground(NOTIFICATION_ID, buildNotification("热点服务运行中"));
+        LogManager.i(TAG, "收到启动指令，开始热点流程");
+        startLocalHotspot();
         return START_STICKY;
     }
 
     @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
+    public IBinder onBind(Intent intent) { return null; }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
         handler.removeCallbacksAndMessages(null);
         try { unregisterReceiver(wifiStateReceiver); } catch (Exception ignored) {}
-        LogManager.i(TAG, "Wi-Fi 服务已停止");
+        stopLocalHotspot();
+        LogManager.i(TAG, "Wi-Fi 热点服务已停止");
     }
 
-    /**
-     * 开始 Wi-Fi 连接流程
-     */
-    public void startWifiConnect() {
-        if (wifiManager == null) {
-            LogManager.e(TAG, "设备不支持 Wi-Fi");
-            return;
-        }
-        if (isConnecting || isConnected) return;
-        if (!config.isEnabled() || config.getTargetSsid() == null || config.getTargetSsid().isEmpty()) {
-            LogManager.w(TAG, "Wi-Fi 未配置目标 SSID");
-            return;
-        }
-
-        // 开启 Wi-Fi
-        if (!wifiManager.isWifiEnabled()) {
-            LogManager.i(TAG, "正在开启 Wi-Fi...");
-            wifiManager.setWifiEnabled(true);
-            return; // 等待 Wi-Fi 开启广播
-        }
-
-        // 检查是否已经连接到目标 Wi-Fi
-        WifiInfo currentWifi = wifiManager.getConnectionInfo();
-        if (currentWifi != null) {
-            String currentSsid = currentWifi.getSSID().replace("\"", "");
-            if (isTargetWifi(currentSsid)) {
-                LogManager.i(TAG, "已连接到目标 Wi-Fi: " + currentSsid);
-                onWifiConnected(currentWifi);
-                return;
-            }
-        }
-
-        sendBroadcast(new Intent(ACTION_WIFI_CONNECTING)
-                .putExtra(EXTRA_SSID, config.getTargetSsid()));
-
-        // 先在已保存的网络中找
-        if (connectToSavedNetwork()) return;
-
-        // 开始扫描
-        LogManager.i(TAG, "扫描 Wi-Fi 网络...");
-        wifiManager.startScan();
-    }
+    // ──────────────────────────────────────────────────────────────
+    // 热点流程
+    // ──────────────────────────────────────────────────────────────
 
     /**
-     * 连接已保存的 Wi-Fi 配置
-     */
-    private boolean connectToSavedNetwork() {
-        List<WifiConfiguration> configuredNetworks = wifiManager.getConfiguredNetworks();
-        if (configuredNetworks == null) return false;
-
-        for (WifiConfiguration network : configuredNetworks) {
-            String savedSsid = network.SSID != null ? network.SSID.replace("\"", "") : "";
-            if (isTargetWifi(savedSsid)) {
-                LogManager.i(TAG, "使用已保存配置连接: " + savedSsid);
-                wifiManager.disconnect();
-                wifiManager.enableNetwork(network.networkId, true);
-                wifiManager.reconnect();
-                isConnecting = true;
-
-                // 超时处理
-                handler.postDelayed(() -> {
-                    if (isConnecting && !isConnected) {
-                        isConnecting = false;
-                        LogManager.w(TAG, "Wi-Fi 连接超时");
-                        scheduleRetry();
-                    }
-                }, config.getConnectTimeout() * 1000L);
-
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 处理扫描结果
-     */
-    private void handleScanResults() {
-        List<ScanResult> results = wifiManager.getScanResults();
-        if (results == null) return;
-
-        for (ScanResult result : results) {
-            if (isTargetWifi(result.SSID)) {
-                LogManager.i(TAG, "扫描到目标热点: " + result.SSID + " 信号: " + result.level + "dBm");
-                connectToNewNetwork(result.SSID, config.getPassword());
-                return;
-            }
-        }
-
-        LogManager.w(TAG, "未扫描到目标 Wi-Fi: " + config.getTargetSsid());
-        scheduleRetry();
-    }
-
-    /**
-     * 连接新的 Wi-Fi 网络
-     */
-    private void connectToNewNetwork(String ssid, String password) {
-        WifiConfiguration wifiConf = new WifiConfiguration();
-        wifiConf.SSID = "\"" + ssid + "\"";
-
-        if (password == null || password.isEmpty()) {
-            // 开放网络
-            wifiConf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
-        } else {
-            // WPA/WPA2
-            wifiConf.preSharedKey = "\"" + password + "\"";
-            wifiConf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK);
-        }
-
-        int networkId = wifiManager.addNetwork(wifiConf);
-        if (networkId == -1) {
-            // 尝试更新现有配置
-            List<WifiConfiguration> existingConfigs = wifiManager.getConfiguredNetworks();
-            if (existingConfigs != null) {
-                for (WifiConfiguration conf : existingConfigs) {
-                    if (("\"" + ssid + "\"").equals(conf.SSID)) {
-                        networkId = conf.networkId;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (networkId != -1) {
-            isConnecting = true;
-            wifiManager.disconnect();
-            final int finalNetworkId = networkId;
-            handler.postDelayed(() -> {
-                wifiManager.enableNetwork(finalNetworkId, true);
-                wifiManager.reconnect();
-                LogManager.i(TAG, "正在连接 Wi-Fi: " + ssid);
-
-                handler.postDelayed(() -> {
-                    if (isConnecting && !isConnected) {
-                        isConnecting = false;
-                        LogManager.w(TAG, "Wi-Fi 连接超时");
-                        scheduleRetry();
-                    }
-                }, config.getConnectTimeout() * 1000L);
-            }, 1000);
-        } else {
-            LogManager.e(TAG, "无法添加 Wi-Fi 配置");
-            scheduleRetry();
-        }
-    }
-
-    /**
-     * Wi-Fi 连接成功后处理
-     */
-    private void onWifiConnected(WifiInfo wifiInfo) {
-        isConnected = true;
-        isConnecting = false;
-        currentRetryCount = 0;
-        handler.removeCallbacksAndMessages(null);
-
-        String ssid = wifiInfo.getSSID().replace("\"", "");
-        String ipAddress = intToIp(wifiInfo.getIpAddress());
-        int signal = wifiInfo.getRssi();
-        String mac = wifiInfo.getMacAddress();
-        int linkSpeed = wifiInfo.getLinkSpeed();
-
-        LogManager.i(TAG, "Wi-Fi 连接成功!");
-        LogManager.i(TAG, "  SSID: " + ssid);
-        LogManager.i(TAG, "  IP地址: " + ipAddress);
-        LogManager.i(TAG, "  信号强度: " + signal + " dBm");
-        LogManager.i(TAG, "  MAC地址: " + mac);
-        LogManager.i(TAG, "  链接速率: " + linkSpeed + " Mbps");
-
-        updateNotification("已连接 Wi-Fi: " + ssid);
-
-        Intent intent = new Intent(ACTION_WIFI_CONNECTED);
-        intent.putExtra(EXTRA_SSID, ssid);
-        intent.putExtra(EXTRA_IP, ipAddress);
-        intent.putExtra(EXTRA_SIGNAL, signal);
-        intent.putExtra(EXTRA_MAC, mac);
-        intent.putExtra("link_speed", linkSpeed);
-        sendBroadcast(intent);
-
-        // 通知绑定应用管理器（需蓝牙也已连接才会启动绑定应用）
-        AppLaunchManager.onWifiConnected(this);
-    }
-
-    /**
-     * 判断是否是目标 Wi-Fi
-     */
-    private boolean isTargetWifi(String ssid) {
-        if (ssid == null || ssid.isEmpty()) return false;
-        String target = config.getTargetSsid();
-        if (target == null || target.isEmpty()) return false;
-        return ssid.equalsIgnoreCase(target) || ssid.toLowerCase().contains(target.toLowerCase());
-    }
-
-    /**
-     * 安排重试；超过最大次数则重启 Wi-Fi 模块后重新尝试
-     */
-    private void scheduleRetry() {
-        isConnecting = false;
-        if (currentRetryCount >= config.getMaxRetryCount()) {
-            LogManager.w(TAG, "Wi-Fi 已达最大重试次数 " + config.getMaxRetryCount() + "，重启 Wi-Fi 模块后再试");
-            sendBroadcast(new Intent(ACTION_WIFI_FAILED)
-                    .putExtra(EXTRA_MESSAGE, "已达最大重试次数，正在重启 Wi-Fi..."));
-            updateNotification("重试失败，重启 Wi-Fi 模块...");
-            restartWifiAndRetry();
-            return;
-        }
-        currentRetryCount++;
-        long delay = 8000;
-        LogManager.i(TAG, "Wi-Fi 将在 " + (delay / 1000) + " 秒后重试 (" + currentRetryCount + "/" + config.getMaxRetryCount() + ")");
-        updateNotification("Wi-Fi 连接重试中 " + currentRetryCount + "/" + config.getMaxRetryCount());
-        handler.postDelayed(this::startWifiConnect, delay);
-    }
-
-    /**
-     * 重启 Wi-Fi：先关闭，等 3 秒后重新开启，Wi-Fi 开启广播会自动触发重连
+     * 启动热点入口：
+     * Android 12+ 普通 App 不能强制关闭 Wi-Fi（setWifiEnabled 被静默忽略）
+     * vivo Android 15 不允许通过 TetheringManager/LocalOnlyHotspot 开热点（系统限制）
+     * 策略：
+     *   若 Wi-Fi 关着 → 直接调 startTethering/LocalOnlyHotspot
+     *   若 Wi-Fi 开着 → 跳到系统热点设置页，引导用户开热点，并通过 WIFI_AP_STATE_CHANGED 广播感知
      */
     @SuppressWarnings("deprecation")
-    private void restartWifiAndRetry() {
-        handler.removeCallbacksAndMessages(null);
-        currentRetryCount = 0;
-        isConnecting = false;
-        isConnected = false;
+    private void startLocalHotspot() {
+        if (isHotspotStarted) {
+            LogManager.i(TAG, "热点已在运行，跳过");
+            return;
+        }
+        if (isHotspotStarting) {
+            LogManager.i(TAG, "热点正在启动中，跳过");
+            return;
+        }
+        isHotspotStarting = true;
 
-        LogManager.i(TAG, "正在关闭 Wi-Fi...");
-        wifiManager.setWifiEnabled(false);
-
-        // 等待 3 秒后重新开启
-        handler.postDelayed(() -> {
-            LogManager.i(TAG, "正在开启 Wi-Fi...");
-            wifiManager.setWifiEnabled(true);
-            // setWifiEnabled(true) 后 WIFI_STATE_CHANGED_ACTION 广播会触发 startWifiConnect()
-            // 但保险起见，5 秒后若仍未触发，则手动尝试
-            handler.postDelayed(() -> {
-                if (!isConnecting && !isConnected) {
-                    LogManager.i(TAG, "Wi-Fi 重启后手动触发连接");
-                    startWifiConnect();
+        if (wifiManager.isWifiEnabled()) {
+            LogManager.i(TAG, "Wi-Fi 开启中，跳转热点设置页引导用户开热点...");
+            updateNotification("请开启「个人热点」，App 将自动检测 ▶");
+            // 跳转到系统热点设置页
+            try {
+                Intent hotspotIntent = new Intent("android.settings.TETHER_SETTINGS");
+                hotspotIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(hotspotIntent);
+            } catch (Exception e1) {
+                try {
+                    Intent hotspotIntent = new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS);
+                    hotspotIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(hotspotIntent);
+                } catch (Exception e2) {
+                    LogManager.w(TAG, "无法打开热点设置: " + e2.getMessage());
                 }
-            }, 5000);
-        }, 3000);
+            }
+            // isHotspotStarting 保持 true，等 WIFI_AP_STATE_CHANGED 广播感知热点开启
+        } else {
+            LogManager.i(TAG, "Wi-Fi 已关闭，直接启动热点");
+            handler.postDelayed(() -> doStartHotspot(), 300);
+        }
     }
 
-    private String intToIp(int ip) {
-        return (ip & 0xFF) + "." + ((ip >> 8) & 0xFF) + "." + ((ip >> 16) & 0xFF) + "." + ((ip >> 24) & 0xFF);
+    /**
+     * 获取系统当前热点 SSID
+     */
+    @SuppressWarnings("deprecation")
+    private String getSystemHotspotSsid() {
+        try {
+            java.lang.reflect.Method method = wifiManager.getClass()
+                    .getMethod("getWifiApConfiguration");
+            WifiConfiguration config = (WifiConfiguration) method.invoke(wifiManager);
+            if (config != null && config.SSID != null) return config.SSID;
+        } catch (Exception ignored) {}
+        return "CarConnect_AP";
     }
 
-    private void registerReceivers() {
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
-        filter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
-        filter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION);
-        registerReceiver(wifiStateReceiver, filter);
+    /**
+     * 真正调用 API 开热点
+     * 优先用 ConnectivityManager.startTethering()（需 TETHER_PRIVILEGED，可用 adb 授予）
+     * 回退：startLocalOnlyHotspot → 反射 setWifiApEnabled
+     */
+    @SuppressWarnings("MissingPermission")
+    private void doStartHotspot() {
+        if (isHotspotStarted) return;
+        LogManager.i(TAG, "正在启动本机热点...");
+        updateNotification("热点模式：正在启动热点...");
+
+        // 方案1：ConnectivityManager.startTethering 反射（需 TETHER_PRIVILEGED）
+        if (startTetheringViaConnectivityManager()) {
+            return;
+        }
+
+        // 方案2：startLocalOnlyHotspot → 反射 setWifiApEnabled
+        startLocalOnlyHotspotFallback();
     }
+
+    /**
+     * 反射方式兼容 Android 7 及部分旧机型
+     */
+    @SuppressWarnings("deprecation")
+    private void startHotspotViaReflection() {
+        try {
+            java.lang.reflect.Method method = wifiManager.getClass()
+                    .getMethod("setWifiApEnabled", WifiConfiguration.class, boolean.class);
+            WifiConfiguration config = new WifiConfiguration();
+            config.SSID = "CarConnect_AP";
+            boolean result = (boolean) method.invoke(wifiManager, config, true);
+            if (result) {
+                isHotspotStarted  = true;
+                isHotspotStarting = false;
+                LogManager.i(TAG, "反射方式热点已启动");
+                updateNotification("热点已开启: CarConnect_AP");
+                Intent i = new Intent(ACTION_HOTSPOT_STARTED);
+                i.putExtra(EXTRA_HOTSPOT_SSID, "CarConnect_AP");
+                sendBroadcast(i);
+                AppLaunchManager.onWifiConnected(this);
+            } else {
+                isHotspotStarting = false;
+                LogManager.e(TAG, "反射方式热点启动失败");
+                updateNotification("热点启动失败，请手动开启热点");
+            }
+        } catch (Exception e) {
+            isHotspotStarting = false;
+            LogManager.e(TAG, "反射开热点异常: " + e.getMessage());
+            updateNotification("热点启动失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 通过 ConnectivityManager.startTethering() 反射开热点
+     * 需要 TETHER_PRIVILEGED 权限（adb pm grant 授予）
+     * @return true 表示调用成功（不代表热点开启成功）
+     */
+    private boolean startTetheringViaConnectivityManager() {
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager)
+                    getSystemService(CONNECTIVITY_SERVICE);
+            if (cm == null) return false;
+
+            // Android 12+ 用 TetheringManager.startTethering（反射）
+            try {
+                Object tetheringManager = getSystemService("tethering");
+                if (tetheringManager != null) {
+                    return startTetheringViaTetheringManager(tetheringManager);
+                }
+            } catch (Exception e) {
+                LogManager.w(TAG, "TetheringManager 不可用: " + e.getMessage());
+            }
+
+            // Android 7-11 用 ConnectivityManager.startTethering 反射
+            // OnStartTetheringCallback 是抽象类，动态生成子类
+            Class<?> callbackClass = Class.forName("android.net.ConnectivityManager$OnStartTetheringCallback");
+            Object callback = new Object() {
+                public void onTetheringStarted() {
+                    LogManager.i(TAG, "startTethering: 热点已启动");
+                    isHotspotStarted  = true;
+                    isHotspotStarting = false;
+                    updateNotification("热点已开启");
+                    sendBroadcast(new Intent(ACTION_HOTSPOT_STARTED));
+                    AppLaunchManager.onWifiConnected(WifiService.this);
+                    startClientCheckLoop();
+                }
+                public void onTetheringFailed() {
+                    LogManager.e(TAG, "startTethering: 热点启动失败");
+                    isHotspotStarting = false;
+                    handler.post(() -> startLocalOnlyHotspotFallback());
+                }
+            };
+
+            java.lang.reflect.Method startTethering = cm.getClass().getMethod(
+                    "startTethering", int.class, boolean.class, callbackClass, android.os.Handler.class);
+            startTethering.invoke(cm, 0, false, callback, handler);
+            LogManager.i(TAG, "startTethering(CM) 调用成功，等待回调...");
+            return true;
+        } catch (Exception e) {
+            LogManager.w(TAG, "startTethering(CM) 不可用: " + e.getMessage() + "，回退其他方式");
+            return false;
+        }
+    }
+
+    /**
+     * Android 12+ TetheringManager.startTethering 反射
+     */
+    private boolean startTetheringViaTetheringManager(Object tetheringManager) {
+        try {
+            Class<?> callbackClass = Class.forName("android.net.TetheringManager$StartTetheringCallback");
+            Object callback = java.lang.reflect.Proxy.newProxyInstance(
+                    callbackClass.getClassLoader(),
+                    new Class[]{callbackClass},
+                    (proxy, method1, args) -> {
+                        String mn = method1.getName();
+                        if ("onTetheringStarted".equals(mn)) {
+                            LogManager.i(TAG, "TetheringManager: 热点已启动");
+                            isHotspotStarted  = true;
+                            isHotspotStarting = false;
+                            updateNotification("热点已开启");
+                            sendBroadcast(new Intent(ACTION_HOTSPOT_STARTED));
+                            AppLaunchManager.onWifiConnected(WifiService.this);
+                            startClientCheckLoop();
+                        } else if ("onTetheringFailed".equals(mn)) {
+                            int error = (args != null && args.length > 0) ? (int) args[0] : -1;
+                            LogManager.e(TAG, "TetheringManager: 热点启动失败 error=" + error);
+                            isHotspotStarting = false;
+                            handler.post(() -> startLocalOnlyHotspotFallback());
+                        }
+                        return null;
+                    });
+
+            java.util.concurrent.Executor executor = command -> handler.post(command);
+
+            // 尝试不同 API 签名
+            // 方式1: startTethering(int type, Executor, StartTetheringCallback)
+            try {
+                tetheringManager.getClass().getMethod("startTethering",
+                        int.class,
+                        java.util.concurrent.Executor.class, callbackClass)
+                        .invoke(tetheringManager, 0 /*TETHERING_WIFI*/, executor, callback);
+                LogManager.i(TAG, "TetheringManager.startTethering(int) 调用成功");
+                return true;
+            } catch (NoSuchMethodException ignored) {}
+
+            // 方式2: startTethering(TetheringRequest, Executor, StartTetheringCallback)
+            // TetheringRequest 用 int 构造
+            Class<?> requestClass = Class.forName("android.net.TetheringManager$TetheringRequest");
+            Object request = null;
+            try {
+                // 尝试 Builder(int) 构造
+                Class<?> builderClass = Class.forName("android.net.TetheringManager$TetheringRequest$Builder");
+                Object builder = builderClass.getConstructor(int.class).newInstance(0);
+                request = builderClass.getMethod("build").invoke(builder);
+            } catch (Exception e2) {
+                LogManager.w(TAG, "TetheringRequest.Builder(int) 失败: " + e2.getMessage());
+            }
+            if (request != null) {
+                tetheringManager.getClass().getMethod("startTethering",
+                        requestClass, java.util.concurrent.Executor.class, callbackClass)
+                        .invoke(tetheringManager, request, executor, callback);
+                LogManager.i(TAG, "TetheringManager.startTethering(request) 调用成功");
+                return true;
+            }
+
+            LogManager.w(TAG, "TetheringManager 所有方式均不可用");
+            return false;
+        } catch (Exception e) {
+            LogManager.w(TAG, "TetheringManager.startTethering 异常: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 回退方案：startLocalOnlyHotspot
+     */
+    @SuppressWarnings("MissingPermission")
+    private void startLocalOnlyHotspotFallback() {
+        if (isHotspotStarted || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) startHotspotViaReflection();
+            return;
+        }
+        try {
+            isHotspotStarting = true;
+            wifiManager.startLocalOnlyHotspot(new WifiManager.LocalOnlyHotspotCallback() {
+                @Override
+                public void onStarted(WifiManager.LocalOnlyHotspotReservation reservation) {
+                    localOnlyHotspotReservation = reservation;
+                    isHotspotStarted  = true;
+                    isHotspotStarting = false;
+                    String ssid = reservation.getWifiConfiguration() != null
+                            ? reservation.getWifiConfiguration().SSID : "";
+                    LogManager.i(TAG, "LocalOnlyHotspot 已启动，SSID: " + ssid);
+                    updateNotification("热点已开启: " + ssid);
+                    Intent bi = new Intent(ACTION_HOTSPOT_STARTED);
+                    bi.putExtra(EXTRA_HOTSPOT_SSID, ssid);
+                    sendBroadcast(bi);
+                    AppLaunchManager.onWifiConnected(WifiService.this);
+                    startClientCheckLoop();
+                }
+                @Override public void onStopped() {
+                    isHotspotStarted = false; isHotspotStarting = false;
+                    localOnlyHotspotReservation = null;
+                    sendBroadcast(new Intent(ACTION_HOTSPOT_STOPPED));
+                }
+                @Override public void onFailed(int reason) {
+                    isHotspotStarted = false; isHotspotStarting = false;
+                    LogManager.e(TAG, "LocalOnlyHotspot 失败 reason=" + reason + "，最终回退反射");
+                    startHotspotViaReflection();
+                }
+            }, null);
+        } catch (Exception e) {
+            isHotspotStarting = false;
+            LogManager.e(TAG, "LocalOnlyHotspot 异常: " + e.getMessage());
+            startHotspotViaReflection();
+        }
+    }
+
+    /**
+     * 关闭热点
+     */
+    private void stopLocalHotspot() {
+        if (clientCheckRunnable != null) {
+            handler.removeCallbacks(clientCheckRunnable);
+            clientCheckRunnable = null;
+        }
+        if (localOnlyHotspotReservation != null) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    ((WifiManager.LocalOnlyHotspotReservation) localOnlyHotspotReservation).close();
+                }
+            } catch (Exception e) {
+                LogManager.w(TAG, "关闭热点异常: " + e.getMessage());
+            }
+            localOnlyHotspotReservation = null;
+        }
+        isHotspotStarted  = false;
+        isHotspotStarting = false;
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 客户端检测
+    // ──────────────────────────────────────────────────────────────
+
+    private void startClientCheckLoop() {
+        clientCheckRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (!isHotspotStarted) return;
+                checkHotspotClients();
+                handler.postDelayed(this, 10000);
+            }
+        };
+        handler.postDelayed(clientCheckRunnable, 3000);
+    }
+
+    private void checkHotspotClients() {
+        try {
+            java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.FileReader("/proc/net/arp"));
+            String line;
+            java.util.List<String> clients = new java.util.ArrayList<>();
+            reader.readLine(); // skip header
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.trim().split("\\s+");
+                if (parts.length >= 4) {
+                    String ip  = parts[0];
+                    String mac = parts[3];
+                    if (!mac.equals("00:00:00:00:00:00")) {
+                        clients.add(ip + " (" + mac + ")");
+                    }
+                }
+            }
+            reader.close();
+            Intent intent = new Intent(ACTION_HOTSPOT_CLIENTS_UPDATED);
+            intent.putExtra(EXTRA_CLIENT_COUNT, clients.size());
+            intent.putExtra(EXTRA_CLIENTS_INFO, android.text.TextUtils.join("\n", clients));
+            sendBroadcast(intent);
+        } catch (Exception e) {
+            LogManager.w(TAG, "读取ARP表失败: " + e.getMessage());
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // 通知
+    // ──────────────────────────────────────────────────────────────
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID, "Wi-Fi 连接服务", NotificationManager.IMPORTANCE_LOW);
+                    CHANNEL_ID, "Wi-Fi 热点服务", NotificationManager.IMPORTANCE_LOW);
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) manager.createNotificationChannel(channel);
         }
@@ -409,7 +500,7 @@ public class WifiService extends Service {
         PendingIntent pi = PendingIntent.getActivity(this, 0, intent,
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("CarConnect Wi-Fi")
+                .setContentTitle("CarConnect 热点")
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setContentIntent(pi)

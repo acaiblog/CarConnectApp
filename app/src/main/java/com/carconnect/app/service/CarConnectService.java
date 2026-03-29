@@ -32,8 +32,10 @@ public class CarConnectService extends Service {
     private static final String CHANNEL_ID = "carconnect_main";
     private static final int NOTIFICATION_ID = 1000;
 
-    // 循环扫描间隔（30秒）
-    private static final long SCAN_INTERVAL = 30 * 1000L;
+    /** 动态读取扫描间隔（用户可在主界面配置） */
+    private long getScanInterval() {
+        return SharedPrefsManager.getScanIntervalMs();
+    }
 
     private Handler handler;
     private boolean btConnected = false;
@@ -70,19 +72,22 @@ public class CarConnectService extends Service {
         }
     };
 
-    // 循环扫描任务
+    // 循环扫描任务（每轮结束后重新读取最新间隔值）
     private final Runnable scanRunnable = new Runnable() {
         @Override
         public void run() {
+            boolean hotspotMode = SharedPrefsManager.loadWifiConfig().isHotspotMode();
             if (!btConnected) {
                 LogManager.d(TAG, "循环检测: 蓝牙未连接，触发扫描");
                 startBluetoothServiceScan();
             }
-            if (btConnected && !wifiConnected) {
+            // 热点模式下不触发 Wi-Fi 连接扫描（热点由 WifiService 管理）
+            if (!hotspotMode && btConnected && !wifiConnected) {
                 LogManager.d(TAG, "循环检测: Wi-Fi 未连接，触发扫描");
                 startWifiServiceConnect();
             }
-            handler.postDelayed(this, SCAN_INTERVAL);
+            long interval = getScanInterval();
+            handler.postDelayed(this, interval);
         }
     };
 
@@ -112,9 +117,9 @@ public class CarConnectService extends Service {
 
         // 开始循环扫描
         handler.removeCallbacks(scanRunnable);
-        handler.postDelayed(scanRunnable, SCAN_INTERVAL);
-
-        LogManager.i(TAG, "主服务 onStartCommand，开始循环后台扫描（间隔" + (SCAN_INTERVAL / 1000) + "秒）");
+        long interval = getScanInterval();
+        handler.postDelayed(scanRunnable, interval);
+        LogManager.i(TAG, "主服务 onStartCommand，开始循环后台扫描（间隔" + (interval / 1000) + "秒）");
 
         return START_STICKY;
     }

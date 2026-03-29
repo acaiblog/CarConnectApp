@@ -15,8 +15,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -40,9 +42,11 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final int REQUEST_PERMISSIONS = 100;
 
-    private TextView tvStatus, tvBtStatus, tvWifiStatus, tvWifiInfo;
+    private TextView tvStatus, tvBtStatus, tvWifiStatus, tvWifiInfo, tvIntervalHint, tvBootHint, tvHotspotClients;
     private Button btnBluetoothSettings, btnWifiSettings, btnAppList, btnLog,
-            btnStartService, btnStopScan, btnManualScan, btnToggleTheme;
+            btnStartService, btnStopScan, btnManualScan, btnToggleTheme, btnSaveInterval;
+    private EditText etScanInterval;
+    private Switch swLaunchOnBoot;
 
     private final BroadcastReceiver mainReceiver = new BroadcastReceiver() {
         @Override
@@ -97,6 +101,31 @@ public class MainActivity extends AppCompatActivity {
                         tvWifiStatus.setText("Wi-Fi: 连接中...");
                         tvWifiStatus.setTextColor(getResources().getColor(android.R.color.holo_orange_dark));
                         break;
+                    case WifiService.ACTION_HOTSPOT_STARTED:
+                        tvWifiStatus.setText("📡 热点: 已打开 ✓");
+                        tvWifiStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
+                        tvStatus.setText("状态: 蓝牙已连接 + 热点已打开");
+                        String hotspotSsid = intent.getStringExtra(WifiService.EXTRA_HOTSPOT_SSID);
+                        if (hotspotSsid != null && !hotspotSsid.isEmpty()) {
+                            tvWifiInfo.setText("热点SSID: " + hotspotSsid);
+                        }
+                        if (tvHotspotClients != null) tvHotspotClients.setVisibility(View.VISIBLE);
+                        break;
+                    case WifiService.ACTION_HOTSPOT_STOPPED:
+                        tvWifiStatus.setText("📡 热点: 已关闭");
+                        tvWifiStatus.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+                        tvWifiInfo.setText("");
+                        if (tvHotspotClients != null) tvHotspotClients.setVisibility(View.GONE);
+                        break;
+                    case WifiService.ACTION_HOTSPOT_CLIENTS_UPDATED:
+                        int clientCount = intent.getIntExtra(WifiService.EXTRA_CLIENT_COUNT, 0);
+                        String clientsInfo = intent.getStringExtra(WifiService.EXTRA_CLIENTS_INFO);
+                        if (tvHotspotClients != null) {
+                            tvHotspotClients.setVisibility(View.VISIBLE);
+                            tvHotspotClients.setText("已连接客户端: " + clientCount + " 台"
+                                + (clientsInfo != null && !clientsInfo.isEmpty() ? "\n" + clientsInfo : ""));
+                        }
+                        break;
                 }
             });
         }
@@ -116,7 +145,17 @@ public class MainActivity extends AppCompatActivity {
         requestNecessaryPermissions();
         registerBroadcastReceivers();
         startCarConnectService();
+
         LogManager.i(TAG, "主界面启动");
+    }
+
+    private void updateBootHint(boolean enabled) {
+        if (tvBootHint == null) return;
+        if (enabled) {
+            tvBootHint.setText("已开启：开机后自动启动界面和后台服务");
+        } else {
+            tvBootHint.setText("已关闭：开机后不会自动启动");
+        }
     }
 
     private void initViews() {
@@ -124,6 +163,7 @@ public class MainActivity extends AppCompatActivity {
         tvBtStatus = findViewById(R.id.tv_bt_status);
         tvWifiStatus = findViewById(R.id.tv_wifi_status);
         tvWifiInfo = findViewById(R.id.tv_wifi_info);
+        tvHotspotClients = findViewById(R.id.tv_hotspot_clients);
 
         btnBluetoothSettings = findViewById(R.id.btn_bluetooth_settings);
         btnWifiSettings = findViewById(R.id.btn_wifi_settings);
@@ -133,6 +173,56 @@ public class MainActivity extends AppCompatActivity {
         btnStopScan = findViewById(R.id.btn_stop_scan);
         btnManualScan = findViewById(R.id.btn_manual_scan);
         btnToggleTheme = findViewById(R.id.btn_toggle_theme);
+        btnSaveInterval = findViewById(R.id.btn_save_interval);
+        etScanInterval = findViewById(R.id.et_scan_interval);
+        tvIntervalHint = findViewById(R.id.tv_interval_hint);
+        swLaunchOnBoot = findViewById(R.id.sw_launch_on_boot);
+        tvBootHint = findViewById(R.id.tv_boot_hint);
+
+        // 初始化开机启动开关
+        boolean launchOnBoot = SharedPrefsManager.isLaunchOnBoot();
+        swLaunchOnBoot.setChecked(launchOnBoot);
+        updateBootHint(launchOnBoot);
+        swLaunchOnBoot.setOnCheckedChangeListener((btn, isChecked) -> {
+            SharedPrefsManager.setLaunchOnBoot(isChecked);
+            updateBootHint(isChecked);
+            LogManager.i(TAG, "开机自启已" + (isChecked ? "开启" : "关闭"));
+            Toast.makeText(this, "开机自启已" + (isChecked ? "开启" : "关闭"), Toast.LENGTH_SHORT).show();
+        });
+
+        // 初始化显示当前间隔
+        int curInterval = SharedPrefsManager.getScanIntervalSec();
+        etScanInterval.setText(String.valueOf(curInterval));
+        tvIntervalHint.setText("当前: " + curInterval + " 秒  |  修改后重启服务生效");
+
+        // 保存间隔
+        btnSaveInterval.setOnClickListener(v -> {
+            String input = etScanInterval.getText().toString().trim();
+            if (input.isEmpty()) {
+                Toast.makeText(this, "请输入间隔秒数", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            int sec;
+            try {
+                sec = Integer.parseInt(input);
+            } catch (NumberFormatException e) {
+                Toast.makeText(this, "请输入有效数字", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (sec < 10 || sec > 300) {
+                Toast.makeText(this, "间隔需在 10~300 秒之间", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            SharedPrefsManager.setScanIntervalSec(sec);
+            tvIntervalHint.setText("当前: " + sec + " 秒  |  修改后重启服务生效");
+            LogManager.i(TAG, "后台扫描间隔已设置为 " + sec + " 秒");
+            // 重启服务使新间隔立即生效
+            stopService(new Intent(this, CarConnectService.class));
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                startCarConnectService();
+            }, 500);
+            Toast.makeText(this, "已保存，间隔 " + sec + " 秒，服务已重启", Toast.LENGTH_SHORT).show();
+        });
 
         // 更新主题按钮显示
         updateThemeButton();
@@ -222,6 +312,9 @@ public class MainActivity extends AppCompatActivity {
         filter.addAction(WifiService.ACTION_WIFI_CONNECTED);
         filter.addAction(WifiService.ACTION_WIFI_DISCONNECTED);
         filter.addAction(WifiService.ACTION_WIFI_CONNECTING);
+        filter.addAction(WifiService.ACTION_HOTSPOT_STARTED);
+        filter.addAction(WifiService.ACTION_HOTSPOT_STOPPED);
+        filter.addAction(WifiService.ACTION_HOTSPOT_CLIENTS_UPDATED);
         registerReceiver(mainReceiver, filter);
     }
 
